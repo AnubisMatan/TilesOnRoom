@@ -1,9 +1,9 @@
 ﻿namespace FlooringExercise
 {
-    public  class Tile
+    public class Tile
     {
         private int Width { get; }
-        
+
         private int Height { get; }
 
         public Tile(int height, int width)

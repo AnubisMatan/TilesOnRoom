@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Channels;
 
 namespace FlooringExercise
 {
@@ -12,6 +11,7 @@ namespace FlooringExercise
         {
             List<string> file = null;
 
+            #region GetFile
             while (file == null)
             {
                 string fileName;
@@ -36,10 +36,11 @@ namespace FlooringExercise
                 {
                     Console.WriteLine(e.Message);
                 }
-            }
+            } 
+            #endregion
 
-            List<Tile> tiles;
             Console.WriteLine("Calculating...");
+            List<Tile> tiles;
 
             try
             {
@@ -53,20 +54,54 @@ namespace FlooringExercise
                 return;
             }
 
-            tiles = tiles.OrderByDescending(t => t.GetHeight() * t.GetWidth()).ToList();
-            GetBestMap(tiles);
+            List<Tile> tilesHighToLow = tiles.OrderByDescending(t => t.GetHeight() * t.GetWidth()).ToList();
+            List<Tile> tilesLowToHigh = tiles.OrderBy(t => t.GetHeight() * t.GetWidth()).ToList();
+            
+            var bestMap = GetBestMap(new List<List<Tile>> { tilesLowToHigh, tilesHighToLow });
+
+            PrintMap(bestMap.Map);
+            PrintUsedTiles(bestMap.UsedTiles);
+            PrintFreeAreas(bestMap.Map.FreeTiles);
 
             Console.WriteLine("\nProcess finished, please type any key to exit");
             Console.ReadKey();
         }
 
-        private static void GetBestMap(List<Tile> tiles)
+        private static BestMap GetBestMap(IEnumerable<List<Tile>> tilesLists)
         {
-            const int roomSize = 25;
-            var usedTiles = new Dictionary<string, int>();
-            var bestMap = HandleTiles.PlaceTiles(tiles, new TileMap(roomSize, roomSize));
+            TileMap bestMap = null;
+            Dictionary<string, int> bestUsedTiles = null;
 
-            foreach (var tileSize in bestMap.UsedTiles.Select(usedTile => $"{usedTile.GetWidth()} x {usedTile.GetHeight()}"))
+            foreach (List<Tile> tilesList in tilesLists)
+            {
+                var map = GetMap(tilesList, out Dictionary<string, int> usedTiles);
+
+                if (bestMap == null)
+                {
+                    bestMap = map;
+                    bestUsedTiles = usedTiles;
+                }
+                else if (map.FreeTiles < bestMap.FreeTiles)
+                {
+                    bestMap = map;
+                    bestUsedTiles = usedTiles;
+                }
+            }
+
+            return new BestMap
+            {
+                Map = bestMap,
+                UsedTiles = bestUsedTiles
+            };
+        }
+
+        private static TileMap GetMap(List<Tile> tiles, out Dictionary<string, int> usedTiles)
+        {
+            const int roomSize = 100;
+            usedTiles = new Dictionary<string, int>();
+            var map = HandleTiles.TryToGetMap(tiles, new TileMap(roomSize, roomSize));
+
+            foreach (var tileSize in map.UsedTiles.Select(usedTile => $"{usedTile.GetWidth()} x {usedTile.GetHeight()}"))
             {
                 if (usedTiles.ContainsKey(tileSize))
                 {
@@ -78,12 +113,10 @@ namespace FlooringExercise
                 }
             }
 
-            PrintMap(bestMap);
-            PrintUsedTiles(usedTiles);
-            PrintFreeAreas(bestMap.FreeTiles);
+            return map;
         }
 
-        private static void PrintFreeAreas(in int bestMapFreeTiles)
+        private static void PrintFreeAreas(int bestMapFreeTiles)
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine($"\nAreas without tiles: {bestMapFreeTiles}");
@@ -95,11 +128,19 @@ namespace FlooringExercise
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("\nUsed Tiles:");
             Console.ResetColor();
-
+            var sum = 0;
+            var countTiles = 0;
             foreach (var (tileSize, count) in usedTiles)
             {
+                var splited = tileSize.Split("x");
+                sum = sum + int.Parse(splited[0].Trim()) * int.Parse(splited[1].Trim()) * count;
+                countTiles = countTiles + count;
                 Console.WriteLine($" {count}x of {tileSize}");
             }
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"\nArea covered: {sum}");
+            Console.WriteLine($"\nUsed tiles: {countTiles}");
+            Console.ResetColor();
         }
 
         private static List<Tile> GetTiles(IEnumerable<string> file)
@@ -166,7 +207,7 @@ namespace FlooringExercise
                 {
                     if (tileMap.Map[i, j])
                     {
-                        Console.SetCursorPosition(j +  1, i + top + 1);
+                        Console.SetCursorPosition(j + 1, i + top + 1);
                         Console.WriteLine("*");
 
                         continue;
